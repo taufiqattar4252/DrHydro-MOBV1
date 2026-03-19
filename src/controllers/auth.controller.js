@@ -14,7 +14,7 @@ const googleClient = new OAuth2Client();
 
 export async function register(req, res) {
 
-    const { username, email, password } = req.body;
+    const { name, username, email, password } = req.body;
 
     const isAlreadyRegistered = await userModel.findOne({
         $or: [
@@ -32,6 +32,7 @@ export async function register(req, res) {
     const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
 
     const user = await userModel.create({
+        name,
         username,
         email,
         password: hashedPassword
@@ -53,6 +54,7 @@ export async function register(req, res) {
     res.status(201).json({
         message: "User registered successfully",
         user: {
+            name: user.name,
             username: user.username,
             email: user.email,
             verified: user.verified
@@ -125,6 +127,7 @@ export async function login(req, res) {
     res.status(200).json({
         message: "Logged in successfully",
         user: {
+            name: user.name,
             username: user.username,
             email: user.email,
         },
@@ -150,6 +153,7 @@ export async function getMe(req, res) {
     res.status(200).json({
         message: "user fetched successfully",
         user: {
+            name: user.name,
             username: user.username,
             email: user.email,
         }
@@ -306,6 +310,7 @@ export async function verifyEmail(req, res) {
     return res.status(200).json({
         message: "Email verified successfully",
         user: {
+            name: user.name,
             username: user.username,
             email: user.email,
             verified: user.verified
@@ -339,6 +344,7 @@ export async function googleAuth(req, res) {
             const username = `${baseUsername}_${randomSuffix}`;
             
             user = await userModel.create({
+                name: name || baseUsername,
                 username,
                 email,
                 verified: true,
@@ -378,6 +384,7 @@ export async function googleAuth(req, res) {
         return res.status(200).json({
             message: "Google login successful",
             user: {
+                name: user.name,
                 username: user.username,
                 email: user.email,
                 avatar: user.avatar
@@ -420,6 +427,7 @@ export async function appleAuth(req, res) {
             const username = `appleuser_${randomSuffix}`;
             
             user = await userModel.create({
+                name: "Apple User",
                 username,
                 email,
                 verified: true,
@@ -456,6 +464,7 @@ export async function appleAuth(req, res) {
         return res.status(200).json({
             message: "Apple login successful",
             user: {
+                name: user.name,
                 username: user.username,
                 email: user.email,
                 avatar: user.avatar
