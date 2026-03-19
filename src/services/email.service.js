@@ -3,12 +3,14 @@ import config from '../config/config.js';
 
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
         user: config.GOOGLE_USER,
         pass: config.EMAIL_PASSWORD
     }
-})
+});
 
 // Verify the connection configuration
 transporter.verify((error, success) => {
