@@ -48,8 +48,8 @@ export async function register(req, res) {
         otpHash
     })
 
-    // Remove await so the API responds instantly while the email sends in the background!
-    sendEmail(email, "OTP Verification", `Your OTP code is ${otp}`, html)
+    // We must await in Vercel because serverless functions freeze once res is sent!
+    await sendEmail(email, "OTP Verification", `Your OTP code is ${otp}`, html)
 
     res.status(201).json({
         message: "User registered successfully",
@@ -503,8 +503,8 @@ export async function forgotPassword(req, res) {
         otpHash
     });
 
-    // Send asynchronously in background
-    sendEmail(email, "Password Reset OTP", `Your password reset code is ${otp}`, html);
+    // We must await in Vercel because serverless functions freeze once res is sent!
+    await sendEmail(email, "Password Reset OTP", `Your password reset code is ${otp}`, html);
 
     return res.status(200).json({
         message: "OTP sent to your email"
