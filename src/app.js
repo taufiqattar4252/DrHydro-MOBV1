@@ -3,6 +3,7 @@ import morgan from 'morgan';
 import authRouter from './routes/auth.routes.js';
 import cookieParser from 'cookie-parser';
 import connectDB from './config/database.js';
+import { errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
 
@@ -28,6 +29,6 @@ app.use("/api/auth", authRouter);
 app.get("/", (req, res) => {
     res.json({ status: "success", message: "Server is healthy" });
 });
-
+app.use(errorHandler);
 
 export default app;
