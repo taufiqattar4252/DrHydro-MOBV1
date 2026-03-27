@@ -2,6 +2,7 @@ import WaterIntake from "../models/waterIntake.model.js";
 import Gamification from "../models/gamification.model.js";
 import Profile from "../models/profile.model.js";
 import moment from "moment";
+import { evaluateAchievements } from "../services/gamification.service.js";
 
 export const logDrink = async (req, res) => {
     try {
@@ -44,6 +45,10 @@ export const logDrink = async (req, res) => {
             gamification.points += pointsEarned;
             gamification.lastLogDate = new Date();
             await gamification.save();
+            
+            // Run detailed achievement checks
+            await evaluateAchievements(req.user._id, intake);
+            
             streakUpdated = true;
         }
 
@@ -81,12 +86,20 @@ export const getTodayProgress = async (req, res) => {
             return acc;
         }, {});
 
+        // Hourly breakdown for bar graph
+        const hourlyData = logs.reduce((acc, log) => {
+            const hour = moment(log.timestamp).format('h A');
+            acc[hour] = (acc[hour] || 0) + log.amount;
+            return acc;
+        }, {});
+
         res.status(200).json({
             status: "success",
             totalDrunk,
             goal,
             percentage: Math.min(Math.round((totalDrunk / goal) * 100), 100),
-            breakdown
+            breakdown,
+            hourlyData
         });
     } catch (err) {
         res.status(500).json({ status: "error", message: err.message });
@@ -127,14 +140,110 @@ export const getStats = async (req, res) => {
         const peakHour = Object.keys(hourCounts).reduce((a, b) => hourCounts[a] > hourCounts[b] ? a : b);
         const peakIntakeTime = moment().hour(peakHour).format('h A');
 
+        // 4. Weekly Average Intake Percentage
+        const sevenDaysAgo = moment().subtract(7, 'days').startOf('day').toDate();
+        const weeklyLogs = await WaterIntake.find({
+            user: userId,
+            timestamp: { $gte: sevenDaysAgo }
+        });
+        const profile = await Profile.findOne({ user: userId });
+        const goal = profile?.dailyWaterGoal || 2500;
+        
+        const dailyTotals = weeklyLogs.reduce((acc, log) => {
+            const date = moment(log.timestamp).format('YYYY-MM-DD');
+            acc[date] = (acc[date] || 0) + log.amount;
+            return acc;
+        }, {});
+        
+        const daysCount = Object.keys(dailyTotals).length || 1;
+        const totalWeeklyIntake = Object.values(dailyTotals).reduce((sum, val) => sum + val, 0);
+        const averageWeeklyIntake = totalWeeklyIntake / daysCount;
+        const averageIntakePercentage = Math.round((averageWeeklyIntake / goal) * 100);
+
         res.status(200).json({
             status: "success",
             data: {
                 averageIntake,
                 averageLogsPerDay,
                 peakIntakeTime,
-                totalDrunkAllTime: totalAmount
+                totalDrunkAllTime: totalAmount,
+                averageIntakePercentage
             }
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+export const getWeeklyProgress = async (req, res) => {
+    try {
+        const startOfWeekly = moment().subtract(6, 'days').startOf('day').toDate();
+        const endOfWeekly = moment().endOf('day').toDate();
+
+        const logs = await WaterIntake.find({
+            user: req.user._id,
+            timestamp: { $gte: startOfWeekly, $lte: endOfWeekly }
+        });
+
+        // Group by day for the last 7 days
+        const dailyTotals = {};
+        for (let i = 0; i < 7; i++) {
+            const date = moment().subtract(i, 'days').format('YYYY-MM-DD');
+            dailyTotals[date] = 0;
+        }
+
+        logs.forEach(log => {
+            const date = moment(log.timestamp).format('YYYY-MM-DD');
+            if (dailyTotals[date] !== undefined) {
+                dailyTotals[date] += log.amount;
+            }
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: Object.keys(dailyTotals).map(date => ({
+                date,
+                total: dailyTotals[date],
+                dayName: moment(date).format('ddd')
+            })).reverse()
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+export const getMonthlyProgress = async (req, res) => {
+    try {
+        const startOfMonth = moment().startOf('month').toDate();
+        const endOfMonth = moment().endOf('month').toDate();
+
+        const logs = await WaterIntake.find({
+            user: req.user._id,
+            timestamp: { $gte: startOfMonth, $lte: endOfMonth }
+        });
+
+        const dailyTotals = {};
+        const daysInMonth = moment().daysInMonth();
+        const currentMonthStr = moment().format('YYYY-MM');
+
+        for (let i = 1; i <= daysInMonth; i++) {
+            const date = `${currentMonthStr}-${String(i).padStart(2, '0')}`;
+            dailyTotals[date] = 0;
+        }
+
+        logs.forEach(log => {
+            const date = moment(log.timestamp).format('YYYY-MM-DD');
+            if (dailyTotals[date] !== undefined) {
+                dailyTotals[date] += log.amount;
+            }
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: Object.keys(dailyTotals).map(date => ({
+                date,
+                total: dailyTotals[date]
+            }))
         });
     } catch (err) {
         res.status(500).json({ status: "error", message: err.message });
