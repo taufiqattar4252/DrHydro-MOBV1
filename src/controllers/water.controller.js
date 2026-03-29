@@ -86,7 +86,28 @@ export const getTodayProgress = async (req, res) => {
             return acc;
         }, {});
 
-        // Hourly breakdown for bar graph
+        res.status(200).json({
+            status: "success",
+            totalDrunk,
+            goal,
+            percentage: Math.min(Math.round((totalDrunk / goal) * 100), 100),
+            breakdown
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+export const getHourlyStats = async (req, res) => {
+    try {
+        const startOfDay = moment().startOf('day').toDate();
+        const endOfDay = moment().endOf('day').toDate();
+
+        const logs = await WaterIntake.find({
+            user: req.user._id,
+            timestamp: { $gte: startOfDay, $lte: endOfDay }
+        });
+
         const hourlyData = logs.reduce((acc, log) => {
             const hour = moment(log.timestamp).format('h A');
             acc[hour] = (acc[hour] || 0) + log.amount;
@@ -95,11 +116,7 @@ export const getTodayProgress = async (req, res) => {
 
         res.status(200).json({
             status: "success",
-            totalDrunk,
-            goal,
-            percentage: Math.min(Math.round((totalDrunk / goal) * 100), 100),
-            breakdown,
-            hourlyData
+            data: hourlyData
         });
     } catch (err) {
         res.status(500).json({ status: "error", message: err.message });
@@ -222,27 +239,26 @@ export const getMonthlyProgress = async (req, res) => {
             timestamp: { $gte: startOfMonth, $lte: endOfMonth }
         });
 
-        const dailyTotals = {};
-        const daysInMonth = moment().daysInMonth();
-        const currentMonthStr = moment().format('YYYY-MM');
-
-        for (let i = 1; i <= daysInMonth; i++) {
-            const date = `${currentMonthStr}-${String(i).padStart(2, '0')}`;
-            dailyTotals[date] = 0;
-        }
+        const weeklyTotals = {
+            "Week 1": 0, // Days 1-7
+            "Week 2": 0, // Days 8-14
+            "Week 3": 0, // Days 15-21
+            "Week 4": 0  // Days 22-End
+        };
 
         logs.forEach(log => {
-            const date = moment(log.timestamp).format('YYYY-MM-DD');
-            if (dailyTotals[date] !== undefined) {
-                dailyTotals[date] += log.amount;
-            }
+            const day = moment(log.timestamp).date();
+            if (day <= 7) weeklyTotals["Week 1"] += log.amount;
+            else if (day <= 14) weeklyTotals["Week 2"] += log.amount;
+            else if (day <= 21) weeklyTotals["Week 3"] += log.amount;
+            else weeklyTotals["Week 4"] += log.amount;
         });
 
         res.status(200).json({
             status: "success",
-            data: Object.keys(dailyTotals).map(date => ({
-                date,
-                total: dailyTotals[date]
+            data: Object.keys(weeklyTotals).map(week => ({
+                label: week,
+                total: weeklyTotals[week]
             }))
         });
     } catch (err) {

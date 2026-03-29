@@ -11,12 +11,14 @@ export const getLeaderboard = async (req, res) => {
                 select: 'name email avatar'
             });
 
-        const leaderboard = topPlayers.map(player => ({
-            name: player.user.name,
-            points: player.points,
-            avatar: player.user.avatar,
-            isMe: player.user._id.toString() === req.user._id.toString()
-        }));
+        const leaderboard = topPlayers
+            .filter(player => player.user) // Filter out orphaned records
+            .map(player => ({
+                name: player.user.name,
+                points: player.points,
+                avatar: player.user.avatar,
+                isMe: player.user._id.toString() === req.user._id.toString()
+            }));
 
         res.status(200).json({
             status: "success",

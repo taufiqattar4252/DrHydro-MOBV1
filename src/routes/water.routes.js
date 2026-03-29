@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.post("/log", waterController.logDrink);
 router.get("/today", waterController.getTodayProgress);
+router.get("/hourly-stats", waterController.getHourlyStats);
 router.get("/weekly", waterController.getWeeklyProgress);
 router.get("/monthly", waterController.getMonthlyProgress);
 router.get("/stats", waterController.getStats);
