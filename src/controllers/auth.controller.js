@@ -95,7 +95,7 @@ export async function login(req, res) {
         id: user._id
     }, config.JWT_SECRET,
         {
-            expiresIn: "7d"
+            expiresIn: "365d"
         }
     )
 
@@ -113,7 +113,7 @@ export async function login(req, res) {
         sessionId: session._id
     }, config.JWT_SECRET,
         {
-            expiresIn: "15m"
+            expiresIn: "365d"
         }
     )
 
@@ -121,7 +121,7 @@ export async function login(req, res) {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     })
 
     res.status(200).json({
@@ -190,7 +190,7 @@ export async function refreshToken(req, res) {
         id: decoded.id
     }, config.JWT_SECRET,
         {
-            expiresIn: "15m"
+            expiresIn: "365d"
         }
     )
 
@@ -198,7 +198,7 @@ export async function refreshToken(req, res) {
         id: decoded.id
     }, config.JWT_SECRET,
         {
-            expiresIn: "7d"
+            expiresIn: "365d"
         }
     )
 
@@ -211,7 +211,7 @@ export async function refreshToken(req, res) {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 365 days
     })
 
     res.status(200).json({
@@ -362,7 +362,7 @@ export async function googleAuth(req, res) {
         }
         
         // Generate tokens
-        const refreshToken = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: "7d" });
+        const refreshToken = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: "365d" });
         const refreshTokenHash = crypto.createHash("sha256").update(refreshToken).digest("hex");
         
         const session = await sessionModel.create({
@@ -372,13 +372,13 @@ export async function googleAuth(req, res) {
             userAgent: req.headers["user-agent"] || "MobileApp/GoogleAuth"
         });
         
-        const accessToken = jwt.sign({ id: user._id, sessionId: session._id }, config.JWT_SECRET, { expiresIn: "15m" });
+        const accessToken = jwt.sign({ id: user._id, sessionId: session._id }, config.JWT_SECRET, { expiresIn: "365d" });
         
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: true,
             sameSite: "strict",
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            maxAge: 365 * 24 * 60 * 60 * 1000
         });
         
         return res.status(200).json({
@@ -442,7 +442,7 @@ export async function appleAuth(req, res) {
         }
         
         // Generate tokens
-        const refreshToken = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: "7d" });
+        const refreshToken = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: "365d" });
         const refreshTokenHash = crypto.createHash("sha256").update(refreshToken).digest("hex");
         
         const session = await sessionModel.create({
@@ -452,13 +452,13 @@ export async function appleAuth(req, res) {
             userAgent: req.headers["user-agent"] || "MobileApp/AppleAuth"
         });
         
-        const accessToken = jwt.sign({ id: user._id, sessionId: session._id }, config.JWT_SECRET, { expiresIn: "15m" });
+        const accessToken = jwt.sign({ id: user._id, sessionId: session._id }, config.JWT_SECRET, { expiresIn: "365d" });
         
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: true,
             sameSite: "strict",
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            maxAge: 365 * 24 * 60 * 60 * 1000
         });
         
         return res.status(200).json({
