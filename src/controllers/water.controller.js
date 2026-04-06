@@ -2,7 +2,7 @@ import WaterIntake from "../models/waterIntake.model.js";
 import Gamification from "../models/gamification.model.js";
 import Profile from "../models/profile.model.js";
 import moment from "moment";
-import { evaluateAchievements } from "../services/gamification.service.js";
+import { evaluateOnDrinkLog } from "../services/gamification.service.js";
 
 export const logDrink = async (req, res) => {
     try {
@@ -19,46 +19,35 @@ export const logDrink = async (req, res) => {
             timestamp: new Date()
         });
 
-        // Points Logic: 10 points per 100ml
-        const pointsEarned = Math.floor(amount / 10); 
-        
-        // Streak Logic
-        const gamification = await Gamification.findOne({ user: req.user._id });
-        const today = moment().startOf('day');
-        let streakUpdated = false;
-
-        if (gamification) {
-            const lastLogDate = gamification.lastLogDate ? moment(gamification.lastLogDate).startOf('day') : null;
-            
-            if (!lastLogDate) {
-                gamification.currentStreak = 1;
-            } else if (today.diff(lastLogDate, 'days') === 1) {
-                gamification.currentStreak += 1;
-            } else if (today.diff(lastLogDate, 'days') > 1) {
-                gamification.currentStreak = 1;
-            }
-            
-            if (gamification.currentStreak > gamification.longestStreak) {
-                gamification.longestStreak = gamification.currentStreak;
-            }
-
-            gamification.points += pointsEarned;
-            gamification.lastLogDate = new Date();
-            await gamification.save();
-            
-            // Run detailed achievement checks
-            await evaluateAchievements(req.user._id, intake);
-            
-            streakUpdated = true;
+        // Ensure gamification profile exists
+        let gam = await Gamification.findOne({ user: req.user._id });
+        if (!gam) {
+            gam = await Gamification.create({ user: req.user._id });
         }
+
+        // Update lastLogDate
+        gam.lastLogDate = new Date();
+        await gam.save();
+
+        // Run all gamification evaluations (badges, points, challenges)
+        const newBadges = await evaluateOnDrinkLog(req.user._id, intake);
+
+        // Reload gam to get updated points
+        const updatedGam = await Gamification.findOne({ user: req.user._id });
 
         res.status(201).json({
             status: "success",
             message: `${amount}ml of ${drinkType} logged!`,
             data: intake,
             reward: {
-                pointsEarned,
-                currentStreak: gamification?.currentStreak || 0
+                pointsEarned: 5,
+                totalPoints: updatedGam?.totalPoints || 0,
+                currentStreak: updatedGam?.currentStreak || 0,
+                newBadges: newBadges.map(b => ({
+                    badgeId: b.badgeId,
+                    name: b.name,
+                    icon: b.icon
+                }))
             }
         });
     } catch (err) {
@@ -240,10 +229,10 @@ export const getMonthlyProgress = async (req, res) => {
         });
 
         const weeklyTotals = {
-            "Week 1": 0, // Days 1-7
-            "Week 2": 0, // Days 8-14
-            "Week 3": 0, // Days 15-21
-            "Week 4": 0  // Days 22-End
+            "Week 1": 0,
+            "Week 2": 0,
+            "Week 3": 0,
+            "Week 4": 0
         };
 
         logs.forEach(log => {
@@ -268,7 +257,7 @@ export const getMonthlyProgress = async (req, res) => {
 
 export const getMonthlyHistory = async (req, res) => {
     try {
-        const { year, month } = req.query; // e.g. 2026, 02 (1-indexed or 0-indexed depending on preference, we'll use 1-indexed)
+        const { year, month } = req.query;
         if (!year || !month) {
             return res.status(400).json({ message: "Year and month are required" });
         }

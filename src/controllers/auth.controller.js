@@ -8,13 +8,45 @@ import { generateOtp, getOtpHtml } from "../utils/utils.js";
 import otpModel from "../models/otp.model.js";
 import { OAuth2Client } from "google-auth-library";
 import appleSigninAuth from "apple-signin-auth";
+import Gamification from "../models/gamification.model.js";
+import { awardBadge, addPoints } from "../services/gamification.service.js";
+import { POINTS } from "../config/constants.js";
 
 const googleClient = new OAuth2Client();
 
 
+/**
+ * Helper: process referral code after user creation.
+ * Links referrer <-> referred user bidirectionally.
+ */
+async function processReferral(newUser, referralCode) {
+    if (!referralCode) return;
+
+    // Case-insensitive lookup
+    const referrer = await userModel.findOne({
+        referralCode: referralCode.toUpperCase()
+    });
+
+    if (!referrer || referrer._id.toString() === newUser._id.toString()) return;
+
+    // Link bidirectionally
+    newUser.referredBy = referrer._id;
+    await newUser.save();
+
+    referrer.referredUsers.push(newUser._id);
+    referrer.referralCount = referrer.referredUsers.length;
+    await referrer.save();
+
+    // Award referral badge + points to referrer (first referral)
+    if (referrer.referralCount >= 1) {
+        await awardBadge(referrer._id, "B-14");
+        await addPoints(referrer._id, POINTS.REFERRAL);
+    }
+}
+
 export async function register(req, res) {
 
-    const { name, username, email, password } = req.body;
+    const { name, username, email, password, referralCode } = req.body;
 
     const isAlreadyRegistered = await userModel.findOne({
         $or: [
@@ -24,7 +56,7 @@ export async function register(req, res) {
     })
 
     if (isAlreadyRegistered) {
-        res.status(409).json({
+        return res.status(409).json({
             message: "Username or email already exists"
         })
     }
@@ -37,6 +69,12 @@ export async function register(req, res) {
         email,
         password: hashedPassword
     })
+
+    // Initialize gamification profile
+    await Gamification.create({ user: user._id });
+
+    // Process referral if provided
+    await processReferral(user, referralCode);
 
     const otp = generateOtp();
     const html = getOtpHtml(otp);
@@ -57,7 +95,8 @@ export async function register(req, res) {
             name: user.name,
             username: user.username,
             email: user.email,
-            verified: user.verified
+            verified: user.verified,
+            referralCode: user.referralCode
         },
     })
 
@@ -352,6 +391,13 @@ export async function googleAuth(req, res) {
                 authProviderId: googleId,
                 avatar: picture,
             });
+
+            // Initialize gamification profile
+            await Gamification.create({ user: user._id });
+
+            // Process referral if provided
+            const { referralCode } = req.body;
+            await processReferral(user, referralCode);
         } else if (user.authProvider === 'local') {
             // Optional: link account if previously local
             user.authProvider = 'google';
@@ -434,6 +480,13 @@ export async function appleAuth(req, res) {
                 authProvider: 'apple',
                 authProviderId: appleId,
             });
+
+            // Initialize gamification profile
+            await Gamification.create({ user: user._id });
+
+            // Process referral if provided
+            const { referralCode } = req.body;
+            await processReferral(user, referralCode);
         } else if (user.authProvider === 'local') {
             user.authProvider = 'apple';
             user.authProviderId = appleId;

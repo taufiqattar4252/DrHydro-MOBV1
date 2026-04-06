@@ -2,6 +2,8 @@ import Profile from "../models/profile.model.js";
 import Settings from "../models/settings.model.js";
 import Reminder from "../models/reminder.model.js";
 import Gamification from "../models/gamification.model.js";
+import { addPoints } from "../services/gamification.service.js";
+import { POINTS } from "../config/constants.js";
 
 export const getProfile = async (req, res) => {
     try {
@@ -37,6 +39,24 @@ export const updateProfile = async (req, res) => {
             { $set: req.body },
             { new: true, upsert: true }
         );
+
+        // ── Check profile completion for +25 points ──
+        const gam = await Gamification.findOne({ user: req.user._id });
+        if (gam && !gam.profileComplete) {
+            const isComplete = !!(
+                profile.fullName &&
+                profile.age &&
+                profile.weight &&
+                profile.gender &&
+                profile.dailyWaterGoal
+            );
+
+            if (isComplete) {
+                gam.profileComplete = true;
+                await gam.save();
+                await addPoints(req.user._id, POINTS.COMPLETE_PROFILE);
+            }
+        }
 
         res.status(200).json({
             status: "success",
