@@ -123,7 +123,7 @@ export async function evaluateOnDrinkLog(userId, intake) {
                     gam.consecutiveGoalDays = 1;
                 }
 
-                gam.lastGoalDate = new Date();
+                gam.lastGoalDate = intake.timestamp;
                 await gam.save();
 
                 // ── B-03: Energized (3 consecutive goal-met days) ──
@@ -164,7 +164,7 @@ export async function evaluateOnDrinkLog(userId, intake) {
  */
 async function evaluateChallengeDay(userId, userChallenge, intake, totalToday, goal, logsToday) {
     try {
-        const today = moment().startOf("day");
+        const today = moment(intake.timestamp).startOf("day");
         const challengeStart = moment(userChallenge.startDate).startOf("day");
         const challengeEnd = moment(userChallenge.endDate).startOf("day");
 
@@ -223,7 +223,7 @@ async function evaluateChallengeDay(userId, userChallenge, intake, totalToday, g
             // Check if challenge is now complete
             if (userChallenge.daysCompleted >= userChallenge.totalDays) {
                 userChallenge.status = "completed";
-                userChallenge.completedAt = new Date();
+                userChallenge.completedAt = intake.timestamp;
 
                 // Award completion badge & points
                 const completeBadgeId = CHALLENGE_COMPLETE_BADGES[userChallenge.challengeId];

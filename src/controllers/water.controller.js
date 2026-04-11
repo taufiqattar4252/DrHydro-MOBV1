@@ -6,17 +6,27 @@ import { evaluateOnDrinkLog } from "../services/gamification.service.js";
 
 export const logDrink = async (req, res) => {
     try {
-        const { amount, drinkType } = req.body;
+        const { amount, drinkType, timestamp } = req.body;
         
         if (!amount || !drinkType) {
             return res.status(400).json({ message: "Amount and drink type are required" });
+        }
+
+        let intakeTime = new Date();
+        if (timestamp) {
+            const parsed = new Date(timestamp);
+            if (!isNaN(parsed.getTime())) {
+                intakeTime = parsed;
+            } else {
+                return res.status(400).json({ message: "Invalid timestamp provided" });
+            }
         }
 
         const intake = await WaterIntake.create({
             user: req.user._id,
             amount,
             drinkType,
-            timestamp: new Date()
+            timestamp: intakeTime
         });
 
         // Ensure gamification profile exists
@@ -26,7 +36,7 @@ export const logDrink = async (req, res) => {
         }
 
         // Update lastLogDate
-        gam.lastLogDate = new Date();
+        gam.lastLogDate = intakeTime;
         await gam.save();
 
         // Run all gamification evaluations (badges, points, challenges)
