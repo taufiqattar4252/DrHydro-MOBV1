@@ -193,18 +193,18 @@ export const getStats = async (req, res) => {
 
 export const getWeeklyProgress = async (req, res) => {
     try {
-        const startOfWeekly = moment().subtract(6, 'days').startOf('day').toDate();
-        const endOfWeekly = moment().endOf('day').toDate();
+        const startOfWeekly = moment().startOf('isoWeek').toDate(); // Monday
+        const endOfWeekly = moment().endOf('isoWeek').toDate(); // Sunday
 
         const logs = await WaterIntake.find({
             user: req.user._id,
             timestamp: { $gte: startOfWeekly, $lte: endOfWeekly }
         });
 
-        // Group by day for the last 7 days
+        // Group by day for the current week (Monday to Sunday)
         const dailyTotals = {};
         for (let i = 0; i < 7; i++) {
-            const date = moment().subtract(i, 'days').format('YYYY-MM-DD');
+            const date = moment().startOf('isoWeek').add(i, 'days').format('YYYY-MM-DD');
             dailyTotals[date] = 0;
         }
 
@@ -221,7 +221,7 @@ export const getWeeklyProgress = async (req, res) => {
                 date,
                 total: dailyTotals[date],
                 dayName: moment(date).format('ddd')
-            })).reverse()
+            }))
         });
     } catch (err) {
         res.status(500).json({ status: "error", message: err.message });
