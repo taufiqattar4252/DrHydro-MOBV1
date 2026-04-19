@@ -5,7 +5,7 @@ import Milestone from "../models/milestone.model.js";
 import Profile from "../models/profile.model.js";
 import userModel from "../models/user.model.js";
 import moment from "moment";
-import { awardBadge, addPoints } from "./gamification.service.js";
+import { awardBadge, addPoints, failChallenge } from "./gamification.service.js";
 import { STREAK_MILESTONES } from "../config/constants.js";
 
 /**
@@ -65,23 +65,33 @@ export async function evaluateAllStreaks() {
 
                 await gam.save();
 
-                // ── Fail expired challenges ──
-                const expiredChallenges = await UserChallenge.find({
+                // ── Fail-Fast and Expired challenges ──
+                const activeChallenges = await UserChallenge.find({
                     user: gam.user,
-                    status: { $in: ["accepted", "in_progress"] },
-                    endDate: { $lt: new Date() }
+                    status: { $in: ["accepted", "in_progress"] }
                 });
 
-                for (const uc of expiredChallenges) {
-                    if (uc.daysCompleted < uc.totalDays) {
-                        uc.status = "failed";
-                        await uc.save();
+                const today = moment().startOf("day");
 
-                        // Update milestone
-                        await Milestone.findOneAndUpdate(
-                            { user: gam.user, challengeId: uc.challengeId },
-                            { status: "failed" }
-                        );
+                for (const uc of activeChallenges) {
+                    // 1. Check if expired
+                    if (moment(uc.endDate).isBefore(today)) {
+                        if (uc.daysCompleted < uc.totalDays) {
+                            await failChallenge(gam.user, uc.challengeId);
+                        }
+                        continue;
+                    }
+
+                    // 2. Check if impossible to complete (Fail-Fast)
+                    // Count remaining days (today included as it hasn't been evaluated by cron yet)
+                    const daysRemaining = uc.calendarDays.filter(
+                        d => moment(d.date).startOf("day").isSameOrAfter(today)
+                    ).length;
+
+                    const daysNeeded = uc.totalDays - uc.daysCompleted;
+
+                    if (daysNeeded > daysRemaining) {
+                        await failChallenge(gam.user, uc.challengeId);
                     }
                 }
 

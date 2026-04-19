@@ -42,6 +42,11 @@ const gamificationSchema = new mongoose.Schema({
     consecutiveGoalDays: {
         type: Number,
         default: 0
+    },
+    // Track which challenges have already awarded acceptance points
+    awardedAcceptancePoints: {
+        type: [String], // e.g. ["CH-01", "CH-02"]
+        default: []
     }
 }, { timestamps: true });
 

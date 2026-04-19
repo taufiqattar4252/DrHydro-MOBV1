@@ -294,17 +294,19 @@ export async function acceptChallengeForUser(userId, challengeId, challengeDef) 
         calendarDays
     });
 
-    // Create Milestone
-    await Milestone.create({
-        user: userId,
-        challengeId,
-        challengeName: challengeDef.name,
-        icon: challengeDef.icon,
-        totalDays: challengeDef.durationDays,
-        daysCompleted: 0,
-        progressPercent: 0,
-        status: "in_progress"
-    });
+    // Create or Reset Milestone (Upsert)
+    await Milestone.findOneAndUpdate(
+        { user: userId, challengeId },
+        {
+            challengeName: challengeDef.name,
+            icon: challengeDef.icon,
+            totalDays: challengeDef.durationDays,
+            daysCompleted: 0,
+            progressPercent: 0,
+            status: "in_progress"
+        },
+        { upsert: true, new: true }
+    );
 
     // Award accepted badge (CH-01 → B-09, CH-02 → B-10)
     const acceptBadgeId = CHALLENGE_ACCEPT_BADGES[challengeId];
@@ -313,8 +315,51 @@ export async function acceptChallengeForUser(userId, challengeId, challengeDef) 
         newBadge = await awardBadge(userId, acceptBadgeId);
     }
 
-    // Award accept points
-    await addPoints(userId, POINTS.ACCEPT_CHALLENGE);
+    // Award accept points (only once per challenge type)
+    let gam = await Gamification.findOne({ user: userId });
+    if (!gam) {
+        gam = await Gamification.create({ user: userId });
+    }
+
+    if (!gam.awardedAcceptancePoints.includes(challengeId)) {
+        await addPoints(userId, POINTS.ACCEPT_CHALLENGE);
+        gam.awardedAcceptancePoints.push(challengeId);
+        await gam.save();
+    }
 
     return { userChallenge, newBadge };
+}
+
+/**
+ * Handle a broken/failed challenge. Resets milestone and marks challenge as failed.
+ * Per user request, milestone progress is reset to 0.
+ */
+export async function failChallenge(userId, challengeId) {
+    try {
+        // 1. Mark active/in_progress challenge as failed
+        await UserChallenge.updateMany(
+            { 
+                user: userId, 
+                challengeId: challengeId, 
+                status: { $in: ["accepted", "in_progress"] } 
+            },
+            { $set: { status: "failed" } }
+        );
+
+        // 2. Reset milestone
+        await Milestone.findOneAndUpdate(
+            { user: userId, challengeId: challengeId },
+            { 
+                $set: { 
+                    daysCompleted: 0, 
+                    progressPercent: 0, 
+                    status: "in_progress" // back to default state
+                }
+            }
+        );
+
+        console.log(`🚩 Challenge ${challengeId} failed and reset for user ${userId}`);
+    } catch (err) {
+        console.error("failChallenge error:", err.message);
+    }
 }
