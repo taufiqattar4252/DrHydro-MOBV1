@@ -30,6 +30,10 @@ const profileSchema = new mongoose.Schema({
     },
     avatar: {
         type: String // URL to image
+    },
+    utcOffset: {
+        type: Number, // in minutes, e.g. 330 for +05:30
+        default: 0
     }
 }, { timestamps: true });
 

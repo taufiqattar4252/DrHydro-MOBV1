@@ -18,15 +18,19 @@ export async function evaluateAllStreaks() {
 
     try {
         const users = await Gamification.find();
-        const yesterday = moment().subtract(1, "day");
-        const startOfYesterday = yesterday.startOf("day").toDate();
-        const endOfYesterday = yesterday.endOf("day").toDate();
 
         for (const gam of users) {
             try {
-                // Get user's daily goal
+                // Get user's profile for timezone and goal
                 const profile = await Profile.findOne({ user: gam.user });
+                const userOffset = profile?.utcOffset || 0;
                 const goal = profile?.dailyWaterGoal || 2500;
+
+                // Time definitions in user's timezone
+                const yesterday = moment().utcOffset(userOffset).subtract(1, "day");
+                const startOfYesterday = yesterday.startOf("day").toDate();
+                const endOfYesterday = yesterday.endOf("day").toDate();
+                const today = moment().utcOffset(userOffset).startOf("day");
 
                 // Calculate yesterday's total intake
                 const logs = await WaterIntake.find({
@@ -71,11 +75,10 @@ export async function evaluateAllStreaks() {
                     status: { $in: ["accepted", "in_progress"] }
                 });
 
-                const today = moment().startOf("day");
-
                 for (const uc of activeChallenges) {
                     // 1. Check if expired
-                    if (moment(uc.endDate).isBefore(today)) {
+                    // Note: We use isSameOrAfter(today) to keep it active until the very end of its last day
+                    if (moment(uc.endDate).utcOffset(userOffset).startOf("day").isBefore(today)) {
                         if (uc.daysCompleted < uc.totalDays) {
                             await failChallenge(gam.user, uc.challengeId);
                         }
@@ -85,7 +88,7 @@ export async function evaluateAllStreaks() {
                     // 2. Check if impossible to complete (Fail-Fast)
                     // Count remaining days (today included as it hasn't been evaluated by cron yet)
                     const daysRemaining = uc.calendarDays.filter(
-                        d => moment(d.date).startOf("day").isSameOrAfter(today)
+                        d => moment(d.date).utcOffset(userOffset).startOf("day").isSameOrAfter(today)
                     ).length;
 
                     const daysNeeded = uc.totalDays - uc.daysCompleted;
