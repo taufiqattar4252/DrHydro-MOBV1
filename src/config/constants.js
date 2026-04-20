@@ -59,20 +59,20 @@ export const CHALLENGES = [
 ];
 
 export const BADGES = [
-    { badgeId: "B-01", name: "💧 First Sip",        icon: "💧", trigger: "First drink logged" },
-    { badgeId: "B-02", name: "🌊 Wave Maker",       icon: "🌊", trigger: "7-day streak achieved" },
-    { badgeId: "B-03", name: "⚡ Energized",         icon: "⚡", trigger: "Hit 100% goal for 3 consecutive days" },
-    { badgeId: "B-04", name: "🏆 Champion",          icon: "🏆", trigger: "30-day streak achieved" },
-    { badgeId: "B-05", name: "🌙 Night Owl",         icon: "🌙", trigger: "Drink logged after 10 PM" },
-    { badgeId: "B-06", name: "🌅 Early Bird",        icon: "🌅", trigger: "Drink logged before 8 AM" },
-    { badgeId: "B-07", name: "💪 Consistent",        icon: "💪", trigger: "14-day streak achieved" },
-    { badgeId: "B-08", name: "🎯 On Target",         icon: "🎯", trigger: "7 consecutive days of 100% goal" },
-    { badgeId: "B-09", name: "🌅 Early Bird Ch.",    icon: "🌅", trigger: "Challenge CH-01 completed" },
-    { badgeId: "B-10", name: "💻 Desk Sip Ch.",      icon: "💻", trigger: "Challenge CH-02 completed" },
-    { badgeId: "B-11", name: "🦸 Hero Badge",        icon: "🦸", trigger: "Challenge CH-03 completed" },
-    { badgeId: "B-12", name: "⚔️ Warrior Badge",     icon: "⚔️", trigger: "Challenge CH-04 completed" },
-    { badgeId: "B-13", name: "🌿 Recovery Badge",    icon: "🌿", trigger: "Challenge CH-05 completed" },
-    { badgeId: "B-14", name: "🤝 Referral Badge",    icon: "🤝", trigger: "User shares and 1 friend joins" }
+    { badgeId: "B-01", name: "First Sip",        icon: "💧", trigger: "First drink logged" },
+    { badgeId: "B-02", name: "Wave Maker",       icon: "🌊", trigger: "7-day streak achieved" },
+    { badgeId: "B-03", name: "Energized",         icon: "⚡", trigger: "Hit 100% goal for 3 consecutive days" },
+    { badgeId: "B-04", name: "Champion",          icon: "🏆", trigger: "30-day streak achieved" },
+    { badgeId: "B-05", name: "Night Owl",         icon: "🌙", trigger: "Drink logged after 10 PM" },
+    { badgeId: "B-06", name: "Early Bird",        icon: "🌅", trigger: "Drink logged before 8 AM" },
+    { badgeId: "B-07", name: "Consistent",        icon: "💪", trigger: "14-day streak achieved" },
+    { badgeId: "B-08", name: "On Target",         icon: "🎯", trigger: "7 consecutive days of 100% goal" },
+    { badgeId: "B-09", name: "Early Bird Ch.",    icon: "🌅", trigger: "Challenge CH-01 completed" },
+    { badgeId: "B-10", name: "Desk Sip Ch.",      icon: "💻", trigger: "Challenge CH-02 completed" },
+    { badgeId: "B-11", name: "Hero Badge",        icon: "🦸", trigger: "Challenge CH-03 completed" },
+    { badgeId: "B-12", name: "Warrior Badge",     icon: "⚔️", trigger: "Challenge CH-04 completed" },
+    { badgeId: "B-13", name: "Recovery Badge",    icon: "🌿", trigger: "Challenge CH-05 completed" },
+    { badgeId: "B-14", name: "Referral Badge",    icon: "🤝", trigger: "User shares and 1 friend joins" }
 ];
 
 export const POINTS = {
