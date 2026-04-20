@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // UserRewardProfile — stores points and streak data per user
-// Badges and challenges are now in separate collections
+// Badges and challenges are now in separate collections imp
 const gamificationSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
