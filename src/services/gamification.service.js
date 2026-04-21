@@ -372,6 +372,157 @@ export async function acceptChallengeForUser(userId, challengeId, challengeDef) 
 }
 
 /**
+ * Proactively check all active challenges and mark them as failed if goals are missed.
+ * This should be called periodically (e.g., every hour via cron).
+ */
+export async function evaluateAllActiveChallenges() {
+    try {
+        const activeChallenges = await UserChallenge.find({
+            status: { $in: ["accepted", "in_progress"] }
+        });
+
+        console.log(`🔍 Evaluating ${activeChallenges.length} active challenges for failure...`);
+
+        for (const uc of activeChallenges) {
+            console.log(`  - Checking active ${uc.challengeId} for user ${uc.user}...`);
+            const profile = await Profile.findOne({ user: uc.user });
+            const userOffset = profile?.utcOffset || 0;
+            const now = moment().utcOffset(userOffset);
+            const todayStart = moment(now).startOf("day").toDate();
+            const todayEnd = moment(now).endOf("day").toDate();
+
+            let shouldFail = false;
+            let failureReason = "";
+
+            // 1. General Expiration Check
+            if (moment(now).isAfter(moment(uc.endDate))) {
+                shouldFail = true;
+                failureReason = "Challenge period has expired.";
+            }
+
+            // 2. Impossibility Check (Not enough days left to meet totalDays requirement)
+            if (!shouldFail) {
+                const totalDays = uc.totalDays;
+                const daysCompleted = uc.daysCompleted;
+                
+                // Days remaining includes today
+                const futureDaysCount = uc.calendarDays.filter(d => 
+                    moment(d.date).utcOffset(userOffset).startOf("day").isSameOrAfter(moment(now).startOf("day"))
+                ).length;
+
+                if ((daysCompleted + futureDaysCount) < totalDays) {
+                    shouldFail = true;
+                    failureReason = `Impossible to complete: Need ${totalDays - daysCompleted} more days but only ${futureDaysCount} left.`;
+                }
+            }
+
+            // 3. Proactive failure for missed past days
+            if (!shouldFail && uc.calendarDays && uc.calendarDays.length > 0) {
+                const missedPreviousDay = uc.calendarDays.some(d => {
+                    const dayDate = moment(d.date).utcOffset(userOffset).startOf("day");
+                    return dayDate.isBefore(moment(now).startOf("day")) && !d.met;
+                });
+
+                if (missedPreviousDay) {
+                    shouldFail = true;
+                    failureReason = "Missed a previous day goal.";
+                }
+            }
+
+            // 4. Check for missed goals today (time-sensitive: CH-01, CH-02)
+            if (!shouldFail) {
+                switch (uc.challengeId) {
+                    case "CH-01": // Early Bird (300ml before 8 AM)
+                    {
+                        if (now.hour() >= 8) {
+                            const todayDay = uc.calendarDays?.find(d => 
+                                moment(d.date).utcOffset(userOffset).startOf("day").isSame(moment(now).startOf("day"))
+                            );
+                            if (todayDay && !todayDay.met) {
+                                // Double check logs in case we missed a sync
+                                const earlyLogs = await WaterIntake.find({
+                                    user: uc.user,
+                                    timestamp: { 
+                                        $gte: todayStart, 
+                                        $lt: moment(now).startOf("day").hour(8).toDate() 
+                                    }
+                                });
+                                const earlyTotal = earlyLogs.reduce((s, l) => s + l.amount, 0);
+                                if (earlyTotal < 300) {
+                                    shouldFail = true;
+                                    failureReason = "Missed 8 AM deadline for Early Bird.";
+                                } else {
+                                    // It was met, sync it
+                                    todayDay.met = true;
+                                    uc.daysCompleted += 1;
+                                    if (uc.status === "accepted") uc.status = "in_progress";
+                                    await uc.save();
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                    case "CH-02": // Desk Sip (Every hour 9 AM - 5 PM)
+                    {
+                        const hour = now.hour();
+                        if (hour >= 9) {
+                            const todayDay = uc.calendarDays?.find(d => 
+                                moment(d.date).utcOffset(userOffset).startOf("day").isSame(moment(now).startOf("day"))
+                            );
+                            
+                            if (todayDay && !todayDay.met) {
+                                const logsToday = await WaterIntake.find({
+                                    user: uc.user,
+                                    timestamp: { $gte: todayStart, $lte: todayEnd }
+                                });
+
+                                const workHoursMet = new Set();
+                                logsToday.forEach(l => {
+                                    const h = moment(l.timestamp).utcOffset(userOffset).hour();
+                                    if (h >= 9 && h < 17) workHoursMet.add(h);
+                                });
+
+                                const maxCheckHour = Math.min(hour, 17);
+                                for (let h = 9; h < maxCheckHour; h++) {
+                                    if (!workHoursMet.has(h)) {
+                                        shouldFail = true;
+                                        failureReason = "Missed an hourly log for Desk Sip.";
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (shouldFail) {
+                console.log(`🚩 Challenge ${uc.challengeId} (User: ${uc.user}) failed: ${failureReason}`);
+                await failChallenge(uc.user, uc.challengeId);
+            }
+        }
+
+        // 3. Proactive Cleanup: Delete milestones for ALL challenges already marked as failed
+        const failedChallenges = await UserChallenge.find({ status: "failed" });
+        if (failedChallenges.length > 0) {
+            console.log(`🧹 Cleaning up ${failedChallenges.length} failed challenges...`);
+            for (const fc of failedChallenges) {
+                const deleted = await Milestone.deleteOne({ user: fc.user, challengeId: fc.challengeId });
+                if (deleted.deletedCount > 0) {
+                    console.log(`   🗑️ Deleted leftover milestone for ${fc.challengeId} (User: ${fc.user})`);
+                }
+            }
+        }
+
+        console.log("✅ Finished evaluating all challenges.");
+    } catch (err) {
+        console.error("evaluateAllActiveChallenges error:", err?.message || err);
+    }
+}
+
+/**
  * Handle a broken/failed challenge. Resets milestone and marks challenge as failed.
  * Per user request, milestone progress is reset to 0.
  */
@@ -387,20 +538,11 @@ export async function failChallenge(userId, challengeId) {
             { $set: { status: "failed" } }
         );
 
-        // 2. Reset milestone
-        await Milestone.findOneAndUpdate(
-            { user: userId, challengeId: challengeId },
-            { 
-                $set: { 
-                    daysCompleted: 0, 
-                    progressPercent: 0, 
-                    status: "in_progress" // back to default state
-                }
-            }
-        );
+        // 2. Delete milestone
+        await Milestone.deleteOne({ user: userId, challengeId: challengeId });
 
-        console.log(`🚩 Challenge ${challengeId} failed and reset for user ${userId}`);
+        console.log(`✅ Milestone for ${challengeId} (User: ${userId}) deleted successfully.`);
     } catch (err) {
-        console.error("failChallenge error:", err.message);
+        console.error("failChallenge error:", err?.message || err);
     }
 }
