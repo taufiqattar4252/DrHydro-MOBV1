@@ -504,14 +504,23 @@ export async function evaluateAllActiveChallenges() {
             }
         }
 
-        // 3. Proactive Cleanup: Delete milestones for ALL challenges already marked as failed
-        const failedChallenges = await UserChallenge.find({ status: "failed" });
-        if (failedChallenges.length > 0) {
-            console.log(`🧹 Cleaning up ${failedChallenges.length} failed challenges...`);
-            for (const fc of failedChallenges) {
-                const deleted = await Milestone.deleteOne({ user: fc.user, challengeId: fc.challengeId });
-                if (deleted.deletedCount > 0) {
-                    console.log(`   🗑️ Deleted leftover milestone for ${fc.challengeId} (User: ${fc.user})`);
+        // 3. Proactive Cleanup: Delete orphan milestones
+        // Only delete a milestone if there is NO matching UserChallenge with status recorded as accepted, in_progress, or completed.
+        const allMilestones = await Milestone.find({});
+        if (allMilestones.length > 0) {
+            console.log(`🧹 Checking ${allMilestones.length} milestones for orphan cleanup...`);
+            for (const m of allMilestones) {
+                const hasActiveOrCompleted = await UserChallenge.exists({
+                    user: m.user,
+                    challengeId: m.challengeId,
+                    status: { $in: ["accepted", "in_progress", "completed"] }
+                });
+
+                if (!hasActiveOrCompleted) {
+                    const deleted = await Milestone.deleteOne({ _id: m._id });
+                    if (deleted.deletedCount > 0) {
+                        console.log(`   🗑️ Cleaned up orphan milestone for ${m.challengeId} (User: ${m.user})`);
+                    }
                 }
             }
         }
