@@ -12,6 +12,9 @@ router.get("/rewards", socialController.getRewards);
 // Friend-scoped leaderboard (referral-linked users)
 router.get("/leaderboard", socialController.getLeaderboard);
 
+// Friend-scoped leaderboard daily water intake (referral-linked users)
+router.get("/leaderboard/daily-water", socialController.getLeaderboardDailyWater);
+
 // List all challenges with user status
 router.get("/challenges", socialController.getChallenges);
 

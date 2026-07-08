@@ -118,6 +118,99 @@ export const getLeaderboard = async (req, res) => {
     }
 };
 
+// ─── GET /social/leaderboard/daily-water ─────────────────────────────────────
+
+export const getLeaderboardDailyWater = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const user = await userModel.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ status: "error", message: "User not found" });
+        }
+
+        // Build friend list: user themselves + referredUsers + referredBy
+        const friendIds = [userId];
+
+        if (user.referredBy) {
+            friendIds.push(user.referredBy);
+        }
+
+        if (user.referredUsers && user.referredUsers.length > 0) {
+            friendIds.push(...user.referredUsers);
+        }
+
+        // Fetch all friends user details
+        const friends = await userModel.find({
+            _id: { $in: friendIds }
+        }).select("name username avatar");
+
+        // Fetch profiles for all friends to get dailyWaterGoal and utcOffset
+        const profiles = await Profile.find({
+            user: { $in: friendIds }
+        });
+
+        // Map profiles for quick lookup by user ID string
+        const profileMap = {};
+        profiles.forEach(p => {
+            profileMap[p.user.toString()] = p;
+        });
+
+        // For each friend, compute daily water progress
+        const results = [];
+        for (const friend of friends) {
+            const friendIdStr = friend._id.toString();
+            const friendProfile = profileMap[friendIdStr];
+            
+            const goal = friendProfile?.dailyWaterGoal || 2500;
+            const userOffset = friendProfile?.utcOffset || 0;
+
+            const startOfDay = moment().utcOffset(userOffset).startOf('day').toDate();
+            const endOfDay = moment().utcOffset(userOffset).endOf('day').toDate();
+
+            const logs = await WaterIntake.find({
+                user: friend._id,
+                timestamp: { $gte: startOfDay, $lte: endOfDay }
+            });
+
+            const totalDrunkToday = logs.reduce((sum, log) => sum + log.amount, 0);
+            const percentage = Math.min(Math.round((totalDrunkToday / goal) * 100), 100);
+
+            results.push({
+                userId: friend._id,
+                name: friend.name,
+                username: friend.username,
+                avatar: friend.avatar,
+                dailyWaterGoal: goal,
+                totalDrunkToday,
+                percentage,
+                isMe: friendIdStr === userId.toString()
+            });
+        }
+
+        // Sort by totalDrunkToday descending. Tie-breaker by name.
+        results.sort((a, b) => {
+            if (b.totalDrunkToday !== a.totalDrunkToday) {
+                return b.totalDrunkToday - a.totalDrunkToday;
+            }
+            return a.name.localeCompare(b.name);
+        });
+
+        // Add rank based on sorting
+        const rankedResults = results.map((r, index) => ({
+            rank: index + 1,
+            ...r
+        }));
+
+        res.status(200).json({
+            status: "success",
+            data: rankedResults
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
 // ─── GET /social/challenges ──────────────────────────────────────────────────
 
 export const getChallenges = async (req, res) => {

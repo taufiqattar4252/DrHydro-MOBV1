@@ -1,4 +1,5 @@
 import Profile from "../models/profile.model.js";
+import userModel from "../models/user.model.js";
 import Settings from "../models/settings.model.js";
 import Reminder from "../models/reminder.model.js";
 import Gamification from "../models/gamification.model.js";
@@ -40,6 +41,21 @@ export const updateProfile = async (req, res) => {
             { new: true, upsert: true }
         );
 
+        // Sync fullName, avatar, and username changes to the user document
+        const userUpdate = {};
+        if (req.body.fullName) {
+            userUpdate.name = req.body.fullName;
+        }
+        if (req.body.avatar) {
+            userUpdate.avatar = req.body.avatar;
+        }
+        if (req.body.username) {
+            userUpdate.username = req.body.username;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+            await userModel.findByIdAndUpdate(req.user._id, { $set: userUpdate });
+        }
+
         // ── Check profile completion for +25 points ──
         const gam = await Gamification.findOne({ user: req.user._id });
         if (gam && !gam.profileComplete) {
@@ -50,7 +66,7 @@ export const updateProfile = async (req, res) => {
                 profile.gender &&
                 profile.dailyWaterGoal
             );
-
+           
             if (isComplete) {
                 gam.profileComplete = true;
                 await gam.save();
